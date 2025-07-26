@@ -2,11 +2,17 @@ const mongoDb = require("./config/database");
 const express = require("express");
 const app = express();
 const User = require("./models/user");
-const { validateSignUpData  } = require("./utils/validation");
+const {
+    validateSignUpData
+} = require("./utils/validation");
 const bcrypt = require("bcrypt");
+const cookieParser = require("cookie-parser");
+const jwt = require("jsonwebtoken");
+const {userAuth} = require ("./middlewares/auth");
 
 // Crud
 app.use(express.json());
+app.use(cookieParser());
 
 app.post("/signup", async (req, res) => {
 
@@ -15,7 +21,12 @@ app.post("/signup", async (req, res) => {
         validateSignUpData(req);
 
         // Encrypt the password
-        const {firstName, lastName, emailId, password} = req.body;
+        const {
+            firstName,
+            lastName,
+            emailId,
+            password
+        } = req.body;
         const passwordHash = await bcrypt.hash(password, 10);
 
         // creating a new instance of the User
@@ -34,25 +45,46 @@ app.post("/signup", async (req, res) => {
 });
 
 app.post("/login", async (req, res) => {
-    try{
-        const {emailId, password} = req.body;
+    try {
+        const {
+            emailId,
+            password
+        } = req.body;
 
-        const user = await User.findOne({emailId: emailId});
+        const user = await User.findOne({
+            emailId: emailId
+        });
         if (!user) {
-            throw new Error ("Invalid credentials!");
+            throw new Error("Invalid credentials!");
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid ){
-            throw new Error ("Invalid credentials!");
+        if (!isPasswordValid) {
+            throw new Error("Invalid credentials!");
         }
 
-        res.send ("Login successful.");
+        // Create a JWT token
+        const token = await jwt.sign({
+            _id: user._id
+        }, "DevTinder@9876");
 
-    }catch (err) {
+        // Add the token to cookie and send the response back to the user
+        res.cookie("token", token);
+        res.send("Login successful.");
+
+    } catch (err) {
         res.status(400).send("Error: " + err.message);
     }
-})
+});
+
+app.get("/profile", userAuth, async (req, res) => {
+    try {
+        const user = req.user;
+        res.send(user);
+    } catch (err) {
+        res.status(400).send("Error: "+ err.message);
+    }
+});
 
 // Get user by email
 app.get("/user", async (req, res) => {
