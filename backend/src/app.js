@@ -2,20 +2,57 @@ const mongoDb = require("./config/database");
 const express = require("express");
 const app = express();
 const User = require("./models/user");
+const { validateSignUpData  } = require("./utils/validation");
+const bcrypt = require("bcrypt");
 
 // Crud
 app.use(express.json());
 
 app.post("/signup", async (req, res) => {
-    const user = new User(req.body);
 
     try {
+        // Validation of data
+        validateSignUpData(req);
+
+        // Encrypt the password
+        const {firstName, lastName, emailId, password} = req.body;
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        // creating a new instance of the User
+        const user = new User({
+            firstName,
+            lastName,
+            emailId,
+            password: passwordHash
+        });
+
         await user.save();
         res.send("User added successfully.");
     } catch (err) {
-        res.status(400).send("Error saving the user: " + err.message);
+        res.status(400).send("Error: " + err.message);
     }
 });
+
+app.post("/login", async (req, res) => {
+    try{
+        const {emailId, password} = req.body;
+
+        const user = await User.findOne({emailId: emailId});
+        if (!user) {
+            throw new Error ("Invalid credentials!");
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid ){
+            throw new Error ("Invalid credentials!");
+        }
+
+        res.send ("Login successful.");
+
+    }catch (err) {
+        res.status(400).send("Error: " + err.message);
+    }
+})
 
 // Get user by email
 app.get("/user", async (req, res) => {
@@ -34,7 +71,7 @@ app.get("/user", async (req, res) => {
     } catch (err) {
         res.status(400).send("Something went wrong.");
     }
-})
+});
 
 // Feed api - Get /feed  - get all the users from db
 app.get("/feed", async (req, res) => {
@@ -52,14 +89,13 @@ app.get("/feed", async (req, res) => {
 
 app.get("/userById", async (req, res) => {
     try {
-        const user = await User.findById(req.body.id);  
+        const user = await User.findById(req.body.id);
         if (!user) {
             res.status(404).send("User not found.");
-        }else{
+        } else {
             res.send(user);
         }
-    }
-    catch (err) {
+    } catch (err) {
         res.status(400).send("Something went wrong.");
 
     }
@@ -71,7 +107,7 @@ app.delete("/user", async (req, res) => {
         const user = await User.findByIdAndDelete(req.body.userId);
         console.log(user);
         res.send("User deleted successfully.");
-    }catch (err) {
+    } catch (err) {
         res.status(400).send("Something went wrong.");
     }
 });
@@ -81,18 +117,20 @@ app.patch("/user/:userId", async (req, res) => {
     const userId = req.params?.userId;
     const data = req.body;
     try {
-        const  ALLOWED_UPDATES = ["photoUrl", "about", "gender", "age", "skills"];
-        const isUpdateAllowed = Object.keys(data).every((k) => 
+        const ALLOWED_UPDATES = ["photoUrl", "about", "gender", "age", "skills"];
+        const isUpdateAllowed = Object.keys(data).every((k) =>
             ALLOWED_UPDATES.includes(k)
         );
         if (!isUpdateAllowed) {
-            throw new Error ("Update not allowed.");
+            throw new Error("Update not allowed.");
         }
         if (data?.skills.length > 10) {
-            throw new Error ("Skills cannot be more than 10");
+            throw new Error("Skills cannot be more than 10");
         }
 
-        const user = await User.findByIdAndUpdate({_id: userId }, data, {
+        const user = await User.findByIdAndUpdate({
+            _id: userId
+        }, data, {
             returnDocument: "after",
             runValidators: true,
         });
