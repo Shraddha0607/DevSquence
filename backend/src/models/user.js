@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema({
     firstName: {
@@ -19,7 +21,7 @@ const userSchema = new mongoose.Schema({
         trim: true,
         validate(value) {
             if (!validator.isEmail(value)) {
-                throw new Error ("Invalid email address: " + value);
+                throw new Error("Invalid email address: " + value);
             }
         },
     },
@@ -28,7 +30,7 @@ const userSchema = new mongoose.Schema({
         required: true,
         validate(value) {
             if (!validator.isStrongPassword(value)) {
-                throw new Error ("Enter a strong password: " + value);
+                throw new Error("Enter a strong password: " + value);
             }
         },
     },
@@ -40,7 +42,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         validate(value) {
             if (!["male", "female", "other"].includes(value)) {
-                throw new Error ("Gender data is not valid.");
+                throw new Error("Gender data is not valid.");
             }
         }
     },
@@ -49,7 +51,7 @@ const userSchema = new mongoose.Schema({
         default: "https://www.clipartmax.com/middle/m2i8b1b1i8A0Z5H7_shivaprakash-b-dummy-user/",
         validate(value) {
             if (!validator.isURL(value)) {
-                throw new Error ("Invalid Photo URL: " + value);
+                throw new Error("Invalid Photo URL: " + value);
             }
         },
     },
@@ -63,6 +65,26 @@ const userSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+userSchema.methods.getJWT = async function () {
+    const user = this;
+
+    const token = await jwt.sign({
+        _id: user._id
+    }, "DevTinder@9876", {
+        expiresIn: "1d"
+    });
+
+    return token;
+};
+
+userSchema.methods.validatePassword = async function (passwordInputByUser) {
+    const user = this;
+    const passwordHash = user.password;
+
+    const isPasswordValid = await bcrypt.compare(passwordInputByUser, passwordHash);
+    return isPasswordValid;
+}
 
 const User = mongoose.model("User", userSchema);
 
